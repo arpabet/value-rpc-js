@@ -1,0 +1,31 @@
+{
+  "name": "@arpabet/vrpc-nuxt",
+  "version": "0.1.0",
+  "description": "Nuxt module for value-rpc: client plugin, auto-imported composables, runtime config",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/module.d.ts",
+      "import": "./dist/module.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsup && rm -rf dist/runtime && cp -R src/runtime dist/runtime",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@arpabet/vrpc": "^0.1.0",
+    "@arpabet/vrpc-vue": "^0.1.0",
+    "@nuxt/kit": ">=3.13.0 <5",
+    "defu": "^6.1.4"
+  },
+  "devDependencies": {
+    "@nuxt/schema": ">=3.13.0 <5",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": { "node": ">=22" },
+  "keywords": ["nuxt", "nuxt-module", "rpc", "websocket", "value-rpc"]
+}
