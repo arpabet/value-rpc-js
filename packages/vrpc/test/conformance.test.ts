@@ -5,16 +5,17 @@
 
 /**
  * Conformance suite: runs the TS client against the real Go value-rpc server
- * (conformance/server) over WebSocket + msgpack — every pattern, both call
- * directions, auth, cancellation, and reconnect-with-resumption. Skipped when
- * the Go toolchain is unavailable.
+ * (conformance/server) over WebSocket, once for EACH wire codec — msgpack
+ * (binary frames) and JSON (text frames, negotiated by the vrpc.json
+ * subprotocol). Every pattern, both call directions, auth, cancellation, and
+ * reconnect-with-resumption. Skipped when the Go toolchain is unavailable.
  */
 
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createClient, type VrpcClient } from "../src/client.js";
+import { createClient, type CodecName, type VrpcClient } from "../src/index.js";
 import { Code, VrpcError } from "../src/errors.js";
 import type { Value } from "../src/value.js";
 
@@ -31,15 +32,17 @@ const serverDir = path.resolve(
   "../../../conformance/server",
 );
 
-let proc: ChildProcess | null = null;
-let url = "";
+interface Server {
+  proc: ChildProcess;
+  url: string;
+}
 
-async function startServer(): Promise<string> {
-  proc = spawn("go", ["run", "."], { cwd: serverDir, stdio: ["pipe", "pipe", "inherit"] });
-  return new Promise<string>((resolve, reject) => {
+async function startServer(): Promise<Server> {
+  const proc = spawn("go", ["run", "."], { cwd: serverDir, stdio: ["pipe", "pipe", "inherit"] });
+  const url = await new Promise<string>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("conformance server did not start in time")), 60_000);
     let buffer = "";
-    proc?.stdout?.on("data", (chunk: Buffer) => {
+    proc.stdout?.on("data", (chunk: Buffer) => {
       buffer += chunk.toString();
       const m = /LISTENING (\S+)/.exec(buffer);
       if (m) {
@@ -47,31 +50,41 @@ async function startServer(): Promise<string> {
         resolve(`ws://${m[1]}/rpc`);
       }
     });
-    proc?.on("exit", (code) => {
+    proc.on("exit", (code) => {
       clearTimeout(timer);
       reject(new Error(`conformance server exited early (code ${code})`));
     });
   });
+  return { proc, url };
 }
 
-describe.skipIf(!hasGo)("conformance against the Go server (msgpack over WebSocket)", () => {
+function stopServer(server: Server | undefined): void {
+  server?.proc.stdin?.end();
+  setTimeout(() => server?.proc.kill("SIGKILL"), 1000).unref?.();
+}
+
+const CODECS: CodecName[] = ["msgpack", "json"];
+
+describe.skipIf(!hasGo).each(CODECS)("conformance against the Go server (%s)", (codec) => {
+  let server: Server;
   let client: VrpcClient;
 
   beforeAll(async () => {
-    url = await startServer();
+    server = await startServer();
     client = createClient({
-      url,
+      url: server.url,
+      codec,
       timeoutMs: 4000,
       reconnect: { initialDelayMs: 50, maxDelayMs: 200 },
       metadata: () => ({ traceparent: "00-t" }),
     });
     await client.connect();
+    expect(client.codecName).toBe(codec);
   }, 90_000);
 
   afterAll(() => {
     client?.close();
-    proc?.stdin?.end();
-    setTimeout(() => proc?.kill("SIGKILL"), 1000).unref?.();
+    stopServer(server);
   });
 
   it("unary: greet", async () => {
@@ -87,8 +100,10 @@ describe.skipIf(!hasGo)("conformance against the Go server (msgpack over WebSock
       bytes: new Uint8Array([0, 1, 254, 255]),
       list: [1, "two", null, true, 1.5],
       nested: { deep: { key: "value" } },
-      big: 2n ** 60n,
     };
+    // int64 beyond 2^53 travels exactly over msgpack (bigint); the JSON codec
+    // cannot carry it, so only assert it on the binary path.
+    if (codec === "msgpack") (payload as Record<string, Value>).big = 2n ** 60n;
     const echoed = await client.call("echo", payload);
     expect(echoed).toEqual(payload);
   });
@@ -140,7 +155,6 @@ describe.skipIf(!hasGo)("conformance against the Go server (msgpack over WebSock
 
   it("put-stream: uploads values the server sums", async () => {
     await client.putStream("upload", ["batch"], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-    // The server consumes asynchronously; poll briefly for the totals.
     for (let i = 0; i < 50; i++) {
       const stats = (await client.call("upload.stats")) as { sum: number; count: number };
       if (stats.count >= 10) {
@@ -203,27 +217,18 @@ describe.skipIf(!hasGo)("conformance against the Go server (msgpack over WebSock
     });
     expect(await client.call("kick")).toBe("kicking");
     await reopened;
-    expect(client.clientId).toBe(cid); // same session identity
-    // The Go server accepted the revealed hash-chain pre-image (a rejected
-    // resume would close the socket and this call would never succeed).
+    expect(client.clientId).toBe(cid);
     expect(await client.call("greet", ["again"])).toBe("Hello, again!");
-    // Reverse direction still works over the resumed session.
     expect(await client.call("reverse.call", ["after-resume"])).toBe("client-saw:after-resume");
   }, 15_000);
 
   it("authenticates via the handshake auth field", async () => {
-    const authed = createClient({ url, auth: "secret", reconnect: false });
+    const authed = createClient({ url: server.url, codec, auth: "secret", reconnect: false });
     expect(await authed.call("greet", ["auth"])).toBe("Hello, auth!");
     authed.close();
 
-    const rejected = createClient({ url, auth: "wrong", reconnect: false, connectTimeoutMs: 3000 });
+    const rejected = createClient({ url: server.url, codec, auth: "wrong", reconnect: false, connectTimeoutMs: 3000 });
     await expect(rejected.connect()).rejects.toThrow();
     rejected.close();
-  });
-
-  it("json codec fails fast against a msgpack-only server", async () => {
-    const jsonClient = createClient({ url, codec: "json", reconnect: false, connectTimeoutMs: 3000 });
-    await expect(jsonClient.connect()).rejects.toThrow();
-    jsonClient.close();
   });
 });

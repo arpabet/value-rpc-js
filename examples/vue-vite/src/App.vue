@@ -42,7 +42,7 @@ async function pokeServer(): Promise<void> {
       <input v-model="who" placeholder="name" />
       <button @click="refresh()">refresh</button>
       <p v-if="pending">calling…</p>
-      <p v-else-if="error">error: {{ error.message }}</p>
+      <p v-else-if="error">error [{{ error.code }}]: {{ error.detail }}</p>
       <p v-else>{{ greeting }}</p>
     </section>
 

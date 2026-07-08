@@ -6,3 +6,6 @@ dist/
 *.log
 .DS_Store
 coverage/
+
+# compiled Go example server binary
+examples/server/vrpc-example-server

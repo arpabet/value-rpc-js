@@ -130,6 +130,7 @@ semantics, verified against the Go implementation in the conformance suite).
 packages/vrpc         core (zero deps)
 packages/vrpc-vue     Vue composables
 packages/vrpc-nuxt    Nuxt module
+examples/server       small Go value-rpc server the demo apps connect to
 examples/vue-vite     Vue 3 + Vite demo app
 examples/nuxt         Nuxt demo app
 conformance/server    Go harness the conformance tests run against
@@ -143,12 +144,18 @@ npm run build        # all packages
 npm test             # unit + conformance (spawns the Go server if `go` exists)
 ```
 
-Run the demo server for the examples (needs the value-rpc checkout as a
-sibling directory, see `conformance/server/go.mod`):
+## Running the examples
+
+Both example apps proxy `/rpc` to a Go value-rpc server on `:9000`. Start it,
+then the app (each example's README has the details):
 
 ```sh
-VRPC_ADDR=127.0.0.1:9000 go run ./conformance/server
-# then: cd examples/vue-vite && npm run dev
+# terminal 1 — the example server (needs the value-rpc checkout as a sibling
+# directory, see examples/server/go.mod)
+cd examples/server && VRPC_ADDR=127.0.0.1:9000 go run .
+
+# terminal 2 — the app
+cd examples/vue-vite && npm run dev     # or: cd examples/nuxt && npm run dev
 ```
 
 ## License
