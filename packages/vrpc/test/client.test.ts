@@ -294,6 +294,48 @@ describe("reconnect & resumption", () => {
     client.close();
   });
 
+  it("keeps reconnecting after a wake hint interrupts the backoff (network switch)", async () => {
+    // Regression: the 'online'/visibility wake hint aborts the backoff sleep to
+    // dial immediately. It used to terminate resumeLoop instead, stranding the
+    // client in "resuming" forever — precisely when connectivity had RETURNED.
+    const server = new MockServer();
+    let down = false;
+    const inner = server.dialer();
+    const client = createClient({
+      url: "ws://mock/rpc",
+      dialer: async (opts) => {
+        if (down) throw new VrpcError(Code.Unavailable, "network down");
+        return inner(opts);
+      },
+      timeoutMs: 1000,
+      connectTimeoutMs: 1000,
+      reconnect: { initialDelayMs: 5, maxDelayMs: 20 },
+    });
+    await client.connect();
+    down = true;
+    server.conn.drop();
+    await new Promise((r) => setTimeout(r, 15));
+    expect(client.status).toBe("resuming");
+    // A connectivity-announcement storm (WiFi switch): each hint aborts the
+    // current backoff sleep. The loop must keep dialing through all of them.
+    for (let i = 0; i < 3; i++) {
+      (client as unknown as { resumeAbort: AbortController | null }).resumeAbort?.abort();
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    down = false; // the new network actually routes now
+    await new Promise<void>((resolve) => {
+      if (client.status === "open") return resolve();
+      const off = client.on("status", (s) => {
+        if (s === "open") {
+          off();
+          resolve();
+        }
+      });
+    });
+    expect(client.status).toBe("open");
+    client.close();
+  });
+
   it("fails in-flight calls on drop with Unavailable", async () => {
     const { server, client } = newPair();
     server.addFunction("hang", () => new Promise(() => {}));

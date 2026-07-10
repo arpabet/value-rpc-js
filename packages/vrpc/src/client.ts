@@ -486,13 +486,19 @@ export class VrpcClient {
 
   private async resumeLoop(): Promise<void> {
     if (this.resumeAbort) return; // already resuming
-    const abort = new AbortController();
-    this.resumeAbort = abort;
     this.setStatus("resuming");
     try {
       for (let attempt = 1; attempt <= this.reconnect.maxAttempts; attempt++) {
+        // One abort controller PER attempt: a wake hint (online event / tab
+        // visible) aborts only the current backoff sleep so the dial happens
+        // immediately — it must never terminate the loop itself, or the client
+        // would be stranded in "resuming" with nothing left to reconnect it.
+        const abort = new AbortController();
+        this.resumeAbort = abort;
         await sleep(backoffDelay(attempt, this.reconnect), abort.signal);
-        if (abort.signal.aborted || this._status === "closed") return;
+        this.resumeAbort = null;
+        if (this._status === "closed") return;
+        if (abort.signal.aborted) attempt = 0; // wake hint: dial now, backoff afresh
         this.reconnects++;
         try {
           await this.connect();
