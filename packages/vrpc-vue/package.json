@@ -1,6 +1,6 @@
 {
   "name": "@arpabet/vrpc-vue",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Vue 3 plugin and composables for value-rpc: useVrpcCall, useVrpcStream, useVrpcConnection",
   "license": "Apache-2.0",
   "type": "module",

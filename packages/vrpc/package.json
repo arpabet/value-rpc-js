@@ -1,6 +1,6 @@
 {
   "name": "@arpabet/vrpc",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "value-rpc client for browsers and Node: msgpack/JSON codecs, streams with credit flow control, reconnect with hash-chain resumption, reverse calls",
   "license": "Apache-2.0",
   "type": "module",
@@ -37,5 +37,7 @@
     "value-rpc",
     "vue",
     "nuxt"
-  ]
+  ],
+  "publishConfig": { "access": "public" },
+  "repository": { "type": "git", "url": "https://github.com/arpabet/value-rpc-js.git", "directory": "packages/vrpc" }
 }

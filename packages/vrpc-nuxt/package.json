@@ -1,6 +1,6 @@
 {
   "name": "@arpabet/vrpc-nuxt",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Nuxt module for value-rpc: client plugin, auto-imported composables, runtime config",
   "license": "Apache-2.0",
   "type": "module",
