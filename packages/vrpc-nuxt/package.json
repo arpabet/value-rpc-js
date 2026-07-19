@@ -38,5 +38,13 @@
     "rpc",
     "websocket",
     "value-rpc"
-  ]
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arpabet/value-rpc-js.git",
+    "directory": "packages/vrpc-nuxt"
+  }
 }

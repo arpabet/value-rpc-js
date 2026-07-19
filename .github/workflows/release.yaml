@@ -1,0 +1,61 @@
+name: Release
+
+# Publishes all publishable workspace packages to npm in one run.
+# Trigger: push a version tag (v0.2.0) — or run manually from the Actions UI.
+# Auth: repo secret NPM_TOKEN (npmjs granular access token with read/write
+# on the @arpabet packages). Already-published versions are skipped, so the
+# workflow is safe to re-run after a partial failure.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          # Writes an .npmrc that authenticates via NODE_AUTH_TOKEN
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build all workspaces
+        run: npm run build
+
+      - name: Test all workspaces
+        run: npm test
+
+      - name: Publish packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Dependency order: vrpc → vrpc-vue → vrpc-nuxt. Examples are
+          # "private": true and can never be published.
+          for pkg in packages/vrpc packages/vrpc-vue packages/vrpc-nuxt; do
+            name=$(node -p "require('./$pkg/package.json').name")
+            version=$(node -p "require('./$pkg/package.json').version")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "SKIP     $name@$version — already on the registry"
+            else
+              echo "PUBLISH  $name@$version"
+              npm publish --workspace "$pkg"
+            fi
+          done
