@@ -9,7 +9,7 @@
     "prepare:nuxt": "nuxt prepare"
   },
   "dependencies": {
-    "@arpabet/vrpc-nuxt": "^0.1.0"
+    "@arpabet/vrpc-nuxt": "^0.2.0"
   },
   "devDependencies": {
     "nuxt": "^4.0.0"

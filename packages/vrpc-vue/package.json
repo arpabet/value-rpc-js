@@ -11,14 +11,17 @@
       "import": "./dist/index.js"
     }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@arpabet/vrpc": "^0.1.0"
+    "@arpabet/vrpc": "^0.2.0"
   },
   "peerDependencies": {
     "vue": "^3.4.0"
@@ -30,6 +33,14 @@
     "vitest": "^2.1.0",
     "vue": "^3.5.0"
   },
-  "engines": { "node": ">=22" },
-  "keywords": ["vue", "composables", "rpc", "websocket", "value-rpc"]
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "vue",
+    "composables",
+    "rpc",
+    "websocket",
+    "value-rpc"
+  ]
 }
