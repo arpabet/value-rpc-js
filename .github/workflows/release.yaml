@@ -33,6 +33,15 @@ jobs:
           # Writes an .npmrc that authenticates via NODE_AUTH_TOKEN
           registry-url: https://registry.npmjs.org
 
+      # The vrpc conformance suite runs the real Go value-rpc server
+      # (conformance/server, go.mod requires >= 1.25). The runner's
+      # preinstalled Go is older, which fails `go run .` at startup.
+      - name: Set up Go (conformance server)
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: conformance/server/go.mod
+          cache-dependency-path: conformance/server/go.sum
+
       - name: Install dependencies
         run: npm ci
 

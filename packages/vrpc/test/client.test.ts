@@ -339,6 +339,9 @@ describe("reconnect & resumption", () => {
   it("fails in-flight calls on drop with Unavailable", async () => {
     const { server, client } = newPair();
     server.addFunction("hang", () => new Promise(() => {}));
+    // Connect first: on a slow runner the lazy dial can take longer than the
+    // grace sleep, leaving server.conn empty when we go to drop it.
+    await client.connect();
     const p = client.call("hang", [], { timeoutMs: 5000 });
     await new Promise((r) => setTimeout(r, 10));
     server.conn.drop();
