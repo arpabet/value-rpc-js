@@ -96,6 +96,16 @@ export const webSocketDialer: Dialer = (opts) => {
 };
 
 function wrap(ws: WebSocket): Transport {
+  // Frames can arrive before the consumer assigns onMessage (the server's
+  // handshake response can land in the same task the dial resolves in, before
+  // the client's connect() continuation runs). Buffer any such early frames
+  // and flush them the moment onMessage is wired, so none are dropped.
+  let onMessageCb: ((data: Uint8Array | string) => void) | null = null;
+  const early: (Uint8Array | string)[] = [];
+  const deliver = (d: Uint8Array | string): void => {
+    if (onMessageCb) onMessageCb(d);
+    else early.push(d);
+  };
   const t: Transport = {
     send(data) {
       // Uint8Array and string are both valid WebSocket payloads.
@@ -111,7 +121,16 @@ function wrap(ws: WebSocket): Transport {
         // already closing
       }
     },
-    onMessage: null,
+    get onMessage() {
+      return onMessageCb;
+    },
+    set onMessage(cb: ((data: Uint8Array | string) => void) | null) {
+      onMessageCb = cb;
+      if (cb && early.length > 0) {
+        const queued = early.splice(0, early.length);
+        for (const d of queued) cb(d);
+      }
+    },
     onClose: null,
   };
   let closed = false;
@@ -122,11 +141,11 @@ function wrap(ws: WebSocket): Transport {
   };
   ws.onmessage = (ev: MessageEvent) => {
     const data = ev.data as unknown;
-    if (typeof data === "string") t.onMessage?.(data);
-    else if (data instanceof ArrayBuffer) t.onMessage?.(new Uint8Array(data));
+    if (typeof data === "string") deliver(data);
+    else if (data instanceof ArrayBuffer) deliver(new Uint8Array(data));
     else if (ArrayBuffer.isView(data)) {
       const view = data as ArrayBufferView;
-      t.onMessage?.(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
+      deliver(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
     }
   };
   ws.onclose = (ev) => {
