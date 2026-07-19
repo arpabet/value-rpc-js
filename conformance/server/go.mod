@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	go.arpabet.com/value v1.3.1
-	go.arpabet.com/value-rpc v1.5.2
+	go.arpabet.com/value-rpc v1.5.5
 	go.uber.org/zap v1.28.0
 )
 
@@ -17,5 +17,3 @@ require (
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 )
-
-replace go.arpabet.com/value-rpc => ../../../value-rpc
