@@ -466,6 +466,48 @@ export class VrpcClient {
     await d.promise;
   }
 
+  /**
+   * ensureOpen bounded by the operation's own deadline.
+   *
+   * ensureOpen's contract says the caller applies its timeout "around the
+   * whole op" — but every caller armed its timer only AFTER awaiting it, so a
+   * call issued while the connection was down (status "resuming", e.g. right
+   * after the server restarted itself to apply a settings save) parked in
+   * openWaiters with no deadline at all. Nothing rejected it while reconnects
+   * kept failing, and the caller's UI froze on its busy label forever. The
+   * deadline must cover waiting FOR a socket, not just the round-trip on one.
+   *
+   * Returns the budget remaining for the round-trip itself, so the whole
+   * operation — wait plus round-trip — settles within one timeoutMs. A
+   * timeoutMs of 0 keeps the documented "no deadline" opt-out.
+   */
+  private async openWithin(name: string, timeoutMs: number, signal?: AbortSignal): Promise<number> {
+    if (timeoutMs <= 0 || this._status === "open") {
+      await this.ensureOpen(signal);
+      return timeoutMs;
+    }
+    const started = Date.now();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () =>
+          reject(
+            new VrpcError(
+              Code.DeadlineExceeded,
+              `call ${name} timed out after ${timeoutMs}ms waiting for a connection`,
+            ),
+          ),
+        timeoutMs,
+      );
+    });
+    try {
+      await Promise.race([this.ensureOpen(signal), deadline]);
+    } finally {
+      clearTimeout(timer);
+    }
+    return Math.max(1, timeoutMs - (Date.now() - started));
+  }
+
   private onTransportClose(transport: Transport, err?: Error): void {
     if (transport !== this.transport) {
       // A handshake-in-progress connection failing, or a stale one closing.
@@ -582,8 +624,10 @@ export class VrpcClient {
 
   /** Calls a unary function on the server. */
   async call(name: string, args?: Value, opts: CallOptions = {}): Promise<Value> {
-    await this.ensureOpen(opts.signal);
-    const timeoutMs = opts.timeoutMs ?? this.timeoutMs;
+    // The remaining budget after any wait for a (re)connection — the deadline
+    // is for the whole call, and it is what the server is told, so a call that
+    // spent most of its patience waiting for a socket doesn't overstate it.
+    const timeoutMs = await this.openWithin(name, opts.timeoutMs ?? this.timeoutMs, opts.signal);
     const rid = ++this.nextRequestId;
     const p = new PendingRequest(rid, "unary", name, 1);
     this.pending.set(rid, p);
@@ -701,7 +745,7 @@ export class VrpcClient {
   ): Promise<void> {
     const rid = p.requestId;
     try {
-      await this.ensureOpen(opts.signal);
+      timeoutMs = await this.openWithin(name, timeoutMs, opts.signal);
       const establishTimer = setTimeout(() => {
         if (!p.getClosed) {
           this.cancelRequest(rid);
@@ -753,8 +797,7 @@ export class VrpcClient {
     source: Iterable<Value> | AsyncIterable<Value>,
     opts: CallOptions = {},
   ): Promise<void> {
-    const timeoutMs = opts.timeoutMs ?? this.timeoutMs;
-    await this.ensureOpen(opts.signal);
+    const timeoutMs = await this.openWithin(name, opts.timeoutMs ?? this.timeoutMs, opts.signal);
     const rid = ++this.nextRequestId;
     const p = new PendingRequest(rid, "put", name, 1);
     this.pending.set(rid, p);

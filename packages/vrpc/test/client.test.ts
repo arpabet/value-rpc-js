@@ -73,7 +73,11 @@ describe("unary calls", () => {
     server.addFunction("noop", () => null);
     await client.call("noop", [1], { timeoutMs: 2500, metadata: { extra: "x" } });
     const frame = server.conn.frames.find((f) => f.t === MessageType.FunctionRequest);
-    expect(frame?.sla).toBe(2500);
+    // The deadline covers the wait for a connection (auto-connect here), so
+    // the wire carries the budget REMAINING after it — the caller's patience
+    // minus the instant spent dialing, never more than what was asked.
+    expect(frame?.sla).toBeGreaterThan(2400);
+    expect(frame?.sla).toBeLessThanOrEqual(2500);
     expect(frame?.md).toEqual({ traceparent: "00-abc", extra: "x" });
     client.close();
   });
@@ -262,6 +266,53 @@ describe("reverse calls (server -> client)", () => {
 });
 
 describe("reconnect & resumption", () => {
+  it("a call issued while the client is reconnecting rejects at its deadline instead of parking forever", async () => {
+    // The exact shape of a settings save that restarts the server in place:
+    // the socket drops, the server takes long (or never) to come back, and the
+    // operator's next click issues a call while the client is "resuming".
+    // ensureOpen used to park that call with NO deadline (the per-call timer
+    // was armed only after it), so the UI froze on "Saving…" until the process
+    // died. The deadline must cover the wait for a connection too.
+    const server = new MockServer();
+    let dials = 0;
+    const client = createClient({
+      url: "ws://mock/rpc",
+      dialer: async (opts) => {
+        dials++;
+        if (dials > 1) throw new Error("connection refused"); // the server never comes back
+        return server.dialer()(opts);
+      },
+      timeoutMs: 1000,
+      connectTimeoutMs: 50,
+      reconnect: { initialDelayMs: 5, maxDelayMs: 10 },
+    });
+    server.addFunction("echo", (v) => v);
+    await client.connect();
+    expect(await client.call("echo", 7)).toBe(7);
+
+    server.conn.drop();
+    // The drop propagates asynchronously; the scenario under test is a call
+    // issued AFTER the client noticed and went into "resuming" (an in-flight
+    // call at drop time is a different, already-covered case: Unavailable).
+    if (client.status !== "resuming") {
+      await new Promise<void>((resolve) => {
+        const off = client.on("status", (s) => {
+          if (s === "resuming") {
+            off();
+            resolve();
+          }
+        });
+      });
+    }
+    const t0 = Date.now();
+    const err = (await client.call("echo", 8, { timeoutMs: 120 }).catch((e) => e)) as VrpcError;
+    expect(err.code).toBe(Code.DeadlineExceeded);
+    expect(err.message).toMatch(/waiting for a connection/);
+    // Bounded by the CALL's deadline — not by the resume loop's fortunes.
+    expect(Date.now() - t0).toBeLessThan(1000);
+    client.close();
+  });
+
   it("reconnects after a drop and presents the next chain link", async () => {
     const { server, client } = newPair();
     server.addFunction("ping", () => "pong");
