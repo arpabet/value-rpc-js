@@ -100,6 +100,10 @@ describe("unary calls", () => {
   it("times out and sends CancelRequest", async () => {
     const { server, client } = newPair();
     server.addFunction("slow", () => new Promise((r) => setTimeout(() => r("late"), 500)));
+    // Connect first: the deadline also covers waiting for a socket, and on a
+    // slow runner a 40ms budget can be eaten by the handshake — the call then
+    // rejects before a request (and thus a CancelRequest) is ever sent.
+    await client.connect();
     const err = (await client.call("slow", [], { timeoutMs: 40 }).catch((e) => e)) as VrpcError;
     expect(err.code).toBe(Code.DeadlineExceeded);
     await new Promise((r) => setTimeout(r, 20));
@@ -110,6 +114,7 @@ describe("unary calls", () => {
   it("maps AbortSignal to CancelRequest", async () => {
     const { server, client } = newPair();
     server.addFunction("slow", () => new Promise((r) => setTimeout(() => r("late"), 500)));
+    await client.connect();
     const ctrl = new AbortController();
     const promise = client.call("slow", [], { signal: ctrl.signal });
     setTimeout(() => ctrl.abort(), 10);
