@@ -3,8 +3,8 @@ module vrpc-conformance-server
 go 1.25.0
 
 require (
-	go.arpabet.com/value v1.3.1
-	go.arpabet.com/value-rpc v1.5.5
+	go.arpabet.com/value v1.5.0
+	go.arpabet.com/value-rpc v1.6.2
 	go.uber.org/zap v1.28.0
 )
 
