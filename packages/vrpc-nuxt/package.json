@@ -1,6 +1,6 @@
 {
   "name": "@arpabet/vrpc-nuxt",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Nuxt module for value-rpc: client plugin, auto-imported composables, runtime config",
   "license": "Apache-2.0",
   "type": "module",
@@ -19,8 +19,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@arpabet/vrpc": "^0.2.1",
-    "@arpabet/vrpc-vue": "^0.2.1",
+    "@arpabet/vrpc": "^0.3.0",
+    "@arpabet/vrpc-vue": "^0.3.0",
     "@nuxt/kit": ">=3.13.0 <5",
     "defu": "^6.1.4"
   },

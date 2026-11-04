@@ -14,6 +14,9 @@
  * - bigint         ->  encoded as a number when within ±2^53, else rejected
  *                      (the wire cannot carry it exactly; use msgpack)
  * - VrpcDecimal    ->  rejected on encode (does not round-trip through JSON)
+ * - Date, VrpcTimestamp -> RFC 3339 text in UTC ("2026-10-30T07:28:39.075Z"),
+ *                      the rendering of value's TIMESTAMP; it reads back as a
+ *                      string, because a string is never re-typed by content
  *
  * Known hazard inherited from the convention: a *string* that genuinely starts
  * with "base64," or "data:application/x-msgpack-ext;" is indistinguishable
@@ -21,9 +24,11 @@
  */
 
 import {
+  VrpcBigInt,
   VrpcDecimal,
   VrpcDouble,
   VrpcExt,
+  VrpcTimestamp,
   base64RawStdDecode,
   base64RawStdEncode,
   compareUtf8,
@@ -70,6 +75,8 @@ function writeValue(out: string[], v: Value | undefined, depth: number): void {
     out.push(JSON.stringify(BASE64_PREFIX + base64RawStdEncode(v)));
   } else if (v instanceof VrpcDouble) {
     writeNumber(out, v.value, true);
+  } else if (v instanceof VrpcBigInt) {
+    writeValue(out, v.value, depth);
   } else if (v instanceof VrpcExt) {
     const payload = new Uint8Array(1 + v.data.length);
     payload[0] = v.tag;
@@ -79,6 +86,10 @@ function writeValue(out: string[], v: Value | undefined, depth: number): void {
     throw new TypeError(
       "vrpc: VrpcDecimal does not round-trip through the JSON codec; use msgpack or model it as a string",
     );
+  } else if (v instanceof Date) {
+    out.push(JSON.stringify(VrpcTimestamp.fromDate(v).toString()));
+  } else if (v instanceof VrpcTimestamp) {
+    out.push(JSON.stringify(v.toString()));
   } else if (Array.isArray(v)) {
     out.push("[");
     for (let i = 0; i < v.length; i++) {

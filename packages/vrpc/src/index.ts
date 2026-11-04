@@ -23,11 +23,15 @@ export {
 export { Code, VrpcError, codeName, codeOf } from "./errors.js";
 
 export {
+  VrpcBigInt,
   VrpcDecimal,
   VrpcDouble,
   VrpcExt,
+  VrpcTimestamp,
+  bigInt,
   decimal,
   double,
+  timestamp,
   type Value,
   type ValueMap,
 } from "./value.js";
@@ -48,7 +52,18 @@ export {
   type WireCodec,
 } from "./codec.js";
 
-export { msgpackDecode, msgpackEncode, DEFAULT_LIMITS, type DecodeLimits } from "./msgpack.js";
+export {
+  msgpackDecode,
+  msgpackEncode,
+  timestampPayload,
+  twosComplementDecode,
+  twosComplementEncode,
+  BIGINT_EXT_TAG,
+  DECIMAL_EXT_TAG,
+  DEFAULT_LIMITS,
+  TIMESTAMP_EXT_TAG,
+  type DecodeLimits,
+} from "./msgpack.js";
 export { jsonDecode, jsonEncode } from "./json.js";
 export { HashChain } from "./hashchain.js";
 export { webSocketDialer, type DialOptions, type Dialer, type Transport } from "./transport.js";

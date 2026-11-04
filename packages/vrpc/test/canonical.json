@@ -1,0 +1,810 @@
+{
+  "description": "Canonical MessagePack encodings of go.arpabet.com/value (CANONICAL.md). Every implementation, in any language, must produce exactly these bytes for these values and decode them back to equal values. \"value\" describes the value in a language-neutral notation: kind null, bool (value), long/double/bigint/decimal (text, the exact decimal digits), str (text), bin (hex), timestamp (seconds since the Unix epoch, nanos within the second), ext (tag, hex payload), list (items), map (entries, unsorted here, sorted bytewise on the wire). \"text\" is the String() rendering where it is specified; \"json\" is the JSON rendering where it is stable across languages (maps are left out: whitespace differs between renderers, and JSON is not canonical).",
+  "vectors": [
+    {
+      "name": "null",
+      "value": {
+        "kind": "null"
+      },
+      "hex": "c0",
+      "json": "null"
+    },
+    {
+      "name": "true",
+      "value": {
+        "kind": "bool",
+        "value": true
+      },
+      "hex": "c3",
+      "json": "true"
+    },
+    {
+      "name": "false",
+      "value": {
+        "kind": "bool",
+        "value": false
+      },
+      "hex": "c2",
+      "json": "false"
+    },
+    {
+      "name": "long-0",
+      "value": {
+        "kind": "long",
+        "text": "0"
+      },
+      "hex": "00",
+      "json": "0"
+    },
+    {
+      "name": "long-127",
+      "value": {
+        "kind": "long",
+        "text": "127"
+      },
+      "hex": "7f",
+      "json": "127"
+    },
+    {
+      "name": "long-128",
+      "value": {
+        "kind": "long",
+        "text": "128"
+      },
+      "hex": "cc80",
+      "json": "128"
+    },
+    {
+      "name": "long-255",
+      "value": {
+        "kind": "long",
+        "text": "255"
+      },
+      "hex": "ccff",
+      "json": "255"
+    },
+    {
+      "name": "long-256",
+      "value": {
+        "kind": "long",
+        "text": "256"
+      },
+      "hex": "cd0100",
+      "json": "256"
+    },
+    {
+      "name": "long-65535",
+      "value": {
+        "kind": "long",
+        "text": "65535"
+      },
+      "hex": "cdffff",
+      "json": "65535"
+    },
+    {
+      "name": "long-65536",
+      "value": {
+        "kind": "long",
+        "text": "65536"
+      },
+      "hex": "ce00010000",
+      "json": "65536"
+    },
+    {
+      "name": "long-2^32-1",
+      "value": {
+        "kind": "long",
+        "text": "4294967295"
+      },
+      "hex": "ceffffffff",
+      "json": "4294967295"
+    },
+    {
+      "name": "long-2^32",
+      "value": {
+        "kind": "long",
+        "text": "4294967296"
+      },
+      "hex": "cf0000000100000000",
+      "json": "4294967296"
+    },
+    {
+      "name": "long-max",
+      "value": {
+        "kind": "long",
+        "text": "9223372036854775807"
+      },
+      "hex": "cf7fffffffffffffff",
+      "json": "9223372036854775807"
+    },
+    {
+      "name": "long-neg1",
+      "value": {
+        "kind": "long",
+        "text": "-1"
+      },
+      "hex": "ff",
+      "json": "-1"
+    },
+    {
+      "name": "long-neg32",
+      "value": {
+        "kind": "long",
+        "text": "-32"
+      },
+      "hex": "e0",
+      "json": "-32"
+    },
+    {
+      "name": "long-neg33",
+      "value": {
+        "kind": "long",
+        "text": "-33"
+      },
+      "hex": "d0df",
+      "json": "-33"
+    },
+    {
+      "name": "long-neg128",
+      "value": {
+        "kind": "long",
+        "text": "-128"
+      },
+      "hex": "d080",
+      "json": "-128"
+    },
+    {
+      "name": "long-neg129",
+      "value": {
+        "kind": "long",
+        "text": "-129"
+      },
+      "hex": "d1ff7f",
+      "json": "-129"
+    },
+    {
+      "name": "long-neg32769",
+      "value": {
+        "kind": "long",
+        "text": "-32769"
+      },
+      "hex": "d2ffff7fff",
+      "json": "-32769"
+    },
+    {
+      "name": "long-neg2^31-1",
+      "value": {
+        "kind": "long",
+        "text": "-2147483649"
+      },
+      "hex": "d3ffffffff7fffffff",
+      "json": "-2147483649"
+    },
+    {
+      "name": "long-min",
+      "value": {
+        "kind": "long",
+        "text": "-9223372036854775808"
+      },
+      "hex": "d38000000000000000",
+      "json": "-9223372036854775808"
+    },
+    {
+      "name": "double-0",
+      "value": {
+        "kind": "double",
+        "text": "0"
+      },
+      "hex": "cb0000000000000000",
+      "json": "0"
+    },
+    {
+      "name": "double-1",
+      "value": {
+        "kind": "double",
+        "text": "1"
+      },
+      "hex": "cb3ff0000000000000",
+      "json": "1"
+    },
+    {
+      "name": "double-1.5",
+      "value": {
+        "kind": "double",
+        "text": "1.5"
+      },
+      "hex": "cb3ff8000000000000",
+      "json": "1.5"
+    },
+    {
+      "name": "double-neg12.34",
+      "value": {
+        "kind": "double",
+        "text": "-12.34"
+      },
+      "hex": "cbc028ae147ae147ae",
+      "json": "-12.34"
+    },
+    {
+      "name": "bigint-0",
+      "value": {
+        "kind": "bigint",
+        "text": "0"
+      },
+      "hex": "d40100",
+      "note": "one zero byte, never empty"
+    },
+    {
+      "name": "bigint-1",
+      "value": {
+        "kind": "bigint",
+        "text": "1"
+      },
+      "hex": "d40101"
+    },
+    {
+      "name": "bigint-neg1",
+      "value": {
+        "kind": "bigint",
+        "text": "-1"
+      },
+      "hex": "d401ff"
+    },
+    {
+      "name": "bigint-123",
+      "value": {
+        "kind": "bigint",
+        "text": "123"
+      },
+      "hex": "d4017b"
+    },
+    {
+      "name": "bigint-127",
+      "value": {
+        "kind": "bigint",
+        "text": "127"
+      },
+      "hex": "d4017f"
+    },
+    {
+      "name": "bigint-128",
+      "value": {
+        "kind": "bigint",
+        "text": "128"
+      },
+      "hex": "d5010080",
+      "note": "a leading zero byte keeps the sign positive"
+    },
+    {
+      "name": "bigint-neg128",
+      "value": {
+        "kind": "bigint",
+        "text": "-128"
+      },
+      "hex": "d40180"
+    },
+    {
+      "name": "bigint-neg129",
+      "value": {
+        "kind": "bigint",
+        "text": "-129"
+      },
+      "hex": "d501ff7f"
+    },
+    {
+      "name": "bigint-255",
+      "value": {
+        "kind": "bigint",
+        "text": "255"
+      },
+      "hex": "d50100ff"
+    },
+    {
+      "name": "bigint-256",
+      "value": {
+        "kind": "bigint",
+        "text": "256"
+      },
+      "hex": "d5010100"
+    },
+    {
+      "name": "bigint-neg256",
+      "value": {
+        "kind": "bigint",
+        "text": "-256"
+      },
+      "hex": "d501ff00"
+    },
+    {
+      "name": "bigint-neg1000",
+      "value": {
+        "kind": "bigint",
+        "text": "-1000"
+      },
+      "hex": "d501fc18"
+    },
+    {
+      "name": "bigint-2^63",
+      "value": {
+        "kind": "bigint",
+        "text": "9223372036854775808"
+      },
+      "hex": "c70901008000000000000000"
+    },
+    {
+      "name": "bigint-neg2^63",
+      "value": {
+        "kind": "bigint",
+        "text": "-9223372036854775808"
+      },
+      "hex": "d7018000000000000000"
+    },
+    {
+      "name": "bigint-2^64",
+      "value": {
+        "kind": "bigint",
+        "text": "18446744073709551616"
+      },
+      "hex": "c70901010000000000000000"
+    },
+    {
+      "name": "bigint-10^20",
+      "value": {
+        "kind": "bigint",
+        "text": "100000000000000000000"
+      },
+      "hex": "c70901056bc75e2d63100000"
+    },
+    {
+      "name": "bigint-neg10^20",
+      "value": {
+        "kind": "bigint",
+        "text": "-100000000000000000000"
+      },
+      "hex": "c70901fa9438a1d29cf00000"
+    },
+    {
+      "name": "decimal-0",
+      "value": {
+        "kind": "decimal",
+        "text": "0"
+      },
+      "hex": "c705020000000000",
+      "note": "scale 0, unscaled 00"
+    },
+    {
+      "name": "decimal-1",
+      "value": {
+        "kind": "decimal",
+        "text": "1"
+      },
+      "hex": "c705020000000001"
+    },
+    {
+      "name": "decimal-1.0",
+      "value": {
+        "kind": "decimal",
+        "text": "1.0"
+      },
+      "hex": "c70502000000010a",
+      "note": "distinct from 1: scale 1, unscaled 10"
+    },
+    {
+      "name": "decimal-1.10",
+      "value": {
+        "kind": "decimal",
+        "text": "1.10"
+      },
+      "hex": "c70502000000026e"
+    },
+    {
+      "name": "decimal-123.45",
+      "value": {
+        "kind": "decimal",
+        "text": "123.45"
+      },
+      "hex": "c70602000000023039"
+    },
+    {
+      "name": "decimal-neg1.045",
+      "value": {
+        "kind": "decimal",
+        "text": "-1.045"
+      },
+      "hex": "c7060200000003fbeb"
+    },
+    {
+      "name": "decimal-123.567",
+      "value": {
+        "kind": "decimal",
+        "text": "123.567"
+      },
+      "hex": "c707020000000301e2af"
+    },
+    {
+      "name": "decimal-neg123.567",
+      "value": {
+        "kind": "decimal",
+        "text": "-123.567"
+      },
+      "hex": "c7070200000003fe1d51"
+    },
+    {
+      "name": "decimal-1e3",
+      "value": {
+        "kind": "decimal",
+        "text": "1e3"
+      },
+      "hex": "c70502fffffffd01",
+      "note": "negative scale: unscaled 1, scale -3"
+    },
+    {
+      "name": "decimal-neg1e3",
+      "value": {
+        "kind": "decimal",
+        "text": "-1e3"
+      },
+      "hex": "c70502fffffffdff"
+    },
+    {
+      "name": "decimal-1e-10",
+      "value": {
+        "kind": "decimal",
+        "text": "1e-10"
+      },
+      "hex": "c705020000000a01"
+    },
+    {
+      "name": "decimal-30-digits",
+      "value": {
+        "kind": "decimal",
+        "text": "123456789012345678901234567890"
+      },
+      "hex": "c7110200000000018ee90ff6c373e0ee4e3f0ad2"
+    },
+    {
+      "name": "decimal-30-digits-fraction",
+      "value": {
+        "kind": "decimal",
+        "text": "-1234567890.12345678901234567890"
+      },
+      "hex": "c7110200000014fe7116f0093c8c1f11b1c0f52e"
+    },
+    {
+      "name": "timestamp-epoch",
+      "value": {
+        "kind": "timestamp",
+        "seconds": 0,
+        "nanos": 0
+      },
+      "hex": "d6ff00000000",
+      "text": "1970-01-01T00:00:00Z",
+      "json": "\"1970-01-01T00:00:00Z\"",
+      "note": "32-bit form"
+    },
+    {
+      "name": "timestamp-seconds",
+      "value": {
+        "kind": "timestamp",
+        "seconds": 1793345319,
+        "nanos": 0
+      },
+      "hex": "d6ff6ae44727",
+      "text": "2026-10-30T07:28:39Z",
+      "json": "\"2026-10-30T07:28:39Z\"",
+      "note": "32-bit form"
+    },
+    {
+      "name": "timestamp-millis",
+      "value": {
+        "kind": "timestamp",
+        "seconds": 1793345319,
+        "nanos": 75000000
+      },
+      "hex": "d7ff11e1a3006ae44727",
+      "text": "2026-10-30T07:28:39.075Z",
+      "json": "\"2026-10-30T07:28:39.075Z\"",
+      "note": "64-bit form: nanoseconds above 34 bits of seconds"
+    },
+    {
+      "name": "timestamp-nanos",
+      "value": {
+        "kind": "timestamp",
+        "seconds": 1793345319,
+        "nanos": 123456789
+      },
+      "hex": "d7ff1d6f34546ae44727",
+      "text": "2026-10-30T07:28:39.123456789Z",
+      "json": "\"2026-10-30T07:28:39.123456789Z\"",
+      "note": "64-bit form"
+    },
+    {
+      "name": "timestamp-2^32-1",
+      "value": {
+        "kind": "timestamp",
+        "seconds": 4294967295,
+        "nanos": 0
+      },
+      "hex": "d6ffffffffff",
+      "text": "2106-02-07T06:28:15Z",
+      "json": "\"2106-02-07T06:28:15Z\"",
+      "note": "largest 32-bit form"
+    },
+    {
+      "name": "timestamp-2^32",
+      "value": {
+        "kind": "timestamp",
+        "seconds": 4294967296,
+        "nanos": 0
+      },
+      "hex": "d7ff0000000100000000",
+      "text": "2106-02-07T06:28:16Z",
+      "json": "\"2106-02-07T06:28:16Z\"",
+      "note": "64-bit form although nanoseconds are zero"
+    },
+    {
+      "name": "timestamp-2^34-1-nanos",
+      "value": {
+        "kind": "timestamp",
+        "seconds": 17179869183,
+        "nanos": 999999999
+      },
+      "hex": "d7ffee6b27ffffffffff",
+      "text": "2514-05-30T01:53:03.999999999Z",
+      "json": "\"2514-05-30T01:53:03.999999999Z\"",
+      "note": "largest 64-bit form"
+    },
+    {
+      "name": "timestamp-2^34",
+      "value": {
+        "kind": "timestamp",
+        "seconds": 17179869184,
+        "nanos": 0
+      },
+      "hex": "c70cff000000000000000400000000",
+      "text": "2514-05-30T01:53:04Z",
+      "json": "\"2514-05-30T01:53:04Z\"",
+      "note": "96-bit form"
+    },
+    {
+      "name": "timestamp-neg1",
+      "value": {
+        "kind": "timestamp",
+        "seconds": -1,
+        "nanos": 0
+      },
+      "hex": "c70cff00000000ffffffffffffffff",
+      "text": "1969-12-31T23:59:59Z",
+      "json": "\"1969-12-31T23:59:59Z\"",
+      "note": "96-bit form: seconds before the epoch"
+    },
+    {
+      "name": "timestamp-neg-half",
+      "value": {
+        "kind": "timestamp",
+        "seconds": -1,
+        "nanos": 500000000
+      },
+      "hex": "c70cff1dcd6500ffffffffffffffff",
+      "text": "1969-12-31T23:59:59.5Z",
+      "json": "\"1969-12-31T23:59:59.5Z\"",
+      "note": "96-bit form, 1969-12-31T23:59:59.5Z"
+    },
+    {
+      "name": "timestamp-year-1",
+      "value": {
+        "kind": "timestamp",
+        "seconds": -62135596800,
+        "nanos": 0
+      },
+      "hex": "c70cff00000000fffffff1886e0900",
+      "text": "0001-01-01T00:00:00Z",
+      "json": "\"0001-01-01T00:00:00Z\"",
+      "note": "Go's zero time.Time, 96-bit form"
+    },
+    {
+      "name": "timestamp-year-9999",
+      "value": {
+        "kind": "timestamp",
+        "seconds": 253402300799,
+        "nanos": 999999999
+      },
+      "hex": "c70cff3b9ac9ff0000003afff4417f",
+      "text": "9999-12-31T23:59:59.999999999Z",
+      "json": "\"9999-12-31T23:59:59.999999999Z\"",
+      "note": "9999-12-31T23:59:59.999999999Z, 96-bit form"
+    },
+    {
+      "name": "utf8-empty",
+      "value": {
+        "kind": "str",
+        "text": ""
+      },
+      "hex": "a0",
+      "json": "\"\""
+    },
+    {
+      "name": "utf8-hello",
+      "value": {
+        "kind": "str",
+        "text": "hello"
+      },
+      "hex": "a568656c6c6f",
+      "json": "\"hello\""
+    },
+    {
+      "name": "utf8-unicode",
+      "value": {
+        "kind": "str",
+        "text": "héllo wörld ✓"
+      },
+      "hex": "b168c3a96c6c6f2077c3b6726c6420e29c93",
+      "json": "\"héllo wörld ✓\""
+    },
+    {
+      "name": "raw-empty",
+      "value": {
+        "kind": "bin",
+        "hex": ""
+      },
+      "hex": "c400"
+    },
+    {
+      "name": "raw-123",
+      "value": {
+        "kind": "bin",
+        "hex": "010203"
+      },
+      "hex": "c403010203"
+    },
+    {
+      "name": "ext-unknown",
+      "value": {
+        "kind": "ext",
+        "tag": 7,
+        "hex": "0102"
+      },
+      "hex": "d5070102",
+      "note": "an extension the reader does not know passes through"
+    },
+    {
+      "name": "list-empty",
+      "value": {
+        "kind": "list",
+        "items": []
+      },
+      "hex": "90",
+      "json": "[]"
+    },
+    {
+      "name": "list-123",
+      "value": {
+        "kind": "list",
+        "items": [
+          {
+            "kind": "long",
+            "text": "1"
+          },
+          {
+            "kind": "long",
+            "text": "2"
+          },
+          {
+            "kind": "long",
+            "text": "3"
+          }
+        ]
+      },
+      "hex": "93010203",
+      "json": "[1,2,3]"
+    },
+    {
+      "name": "list-mixed",
+      "value": {
+        "kind": "list",
+        "items": [
+          {
+            "kind": "long",
+            "text": "1"
+          },
+          {
+            "kind": "str",
+            "text": "x"
+          },
+          {
+            "kind": "null"
+          },
+          {
+            "kind": "bool",
+            "value": true
+          }
+        ]
+      },
+      "hex": "9401a178c0c3",
+      "json": "[1,\"x\",null,true]"
+    },
+    {
+      "name": "map-empty",
+      "value": {
+        "kind": "map",
+        "entries": {}
+      },
+      "hex": "80",
+      "json": "{}"
+    },
+    {
+      "name": "map-ab",
+      "value": {
+        "kind": "map",
+        "entries": {
+          "a": {
+            "kind": "long",
+            "text": "1"
+          },
+          "b": {
+            "kind": "long",
+            "text": "2"
+          }
+        }
+      },
+      "hex": "82a16101a16202"
+    },
+    {
+      "name": "map-sorted-bytewise",
+      "value": {
+        "kind": "map",
+        "entries": {
+          "b": {
+            "kind": "long",
+            "text": "2"
+          },
+          "a": {
+            "kind": "long",
+            "text": "1"
+          },
+          "B": {
+            "kind": "long",
+            "text": "3"
+          },
+          "aa": {
+            "kind": "long",
+            "text": "4"
+          }
+        }
+      },
+      "hex": "84a14203a16101a2616104a16202",
+      "note": "keys sort by their UTF-8 bytes: uppercase before lowercase, prefixes first"
+    },
+    {
+      "name": "map-nested",
+      "value": {
+        "kind": "map",
+        "entries": {
+          "list": {
+            "kind": "list",
+            "items": [
+              {
+                "kind": "long",
+                "text": "1"
+              },
+              {
+                "kind": "long",
+                "text": "2"
+              }
+            ]
+          },
+          "when": {
+            "kind": "timestamp",
+            "seconds": 1793345319,
+            "nanos": 0
+          },
+          "amount": {
+            "kind": "decimal",
+            "text": "1.10"
+          }
+        }
+      },
+      "hex": "83a6616d6f756e74c70502000000026ea46c697374920102a47768656ed6ff6ae44727"
+    }
+  ]
+}

@@ -5,18 +5,22 @@
 
 /**
  * MessagePack codec producing the canonical byte form of go.arpabet.com/value
- * (see its CANONICAL.md): minimal integer family, doubles always float64,
- * str/bin distinct, map keys sorted by UTF-8 byte order, BIGINT as ext tag 1
- * (big.Int gob framing), DECIMAL as ext tag 2 (shopspring framing). Equal
- * values therefore produce byte-identical frames on both sides of the wire.
+ * (see its CANONICAL.md and testdata/canonical.json): minimal integer family,
+ * doubles always float64, str/bin distinct, map keys sorted by UTF-8 byte
+ * order, BIGINT as ext type 1 (minimal two's complement), DECIMAL as ext type
+ * 2 (4-byte scale plus two's-complement unscaled integer), TIMESTAMP as
+ * MessagePack's ext type -1 in its smallest form. Equal values therefore
+ * produce byte-identical frames on both sides of the wire.
  */
 
 import {
   INT64_MAX,
   INT64_MIN,
+  VrpcBigInt,
   VrpcDecimal,
   VrpcDouble,
   VrpcExt,
+  VrpcTimestamp,
   compareUtf8,
   isPlainObject,
   utf8Decode,
@@ -27,18 +31,23 @@ import {
 
 export const BIGINT_EXT_TAG = 1;
 export const DECIMAL_EXT_TAG = 2;
+/** MessagePack's timestamp extension, type -1, as the byte on the wire. */
+export const TIMESTAMP_EXT_TAG = 0xff;
 
 /** Decode limits mirroring value's limits.go defaults. */
 export interface DecodeLimits {
   maxDepth: number;
   maxCollectionLen: number;
   maxByteLen: number;
+  /** Largest absolute decimal scale accepted; value's MaxDecimalExponent. 0 disables the check. */
+  maxDecimalExponent?: number;
 }
 
 export const DEFAULT_LIMITS: DecodeLimits = {
   maxDepth: 1000,
   maxCollectionLen: 16_777_216,
   maxByteLen: 1_073_741_824,
+  maxDecimalExponent: 1_048_576,
 };
 
 // ---------------------------------------------------------------------------
@@ -210,42 +219,81 @@ function packExt(w: Writer, tag: number, data: Uint8Array): void {
   w.bytes(data);
 }
 
-/** big.Int gob framing: [version<<1 | signBit, ...big-endian magnitude]. */
-export function bigIntGobEncode(v: bigint): Uint8Array {
-  const neg = v < 0n;
-  let abs = neg ? -v : v;
-  const mag: number[] = [];
-  while (abs > 0n) {
-    mag.unshift(Number(abs & 0xffn));
-    abs >>= 8n;
+/**
+ * The minimal two's-complement big-endian encoding of an integer: at least one
+ * byte, the sign in the top bit (java.math.BigInteger.toByteArray()). 0 is 00,
+ * 127 is 7f, 128 is 0080, -1 is ff, -128 is 80, -129 is ff7f.
+ */
+export function twosComplementEncode(v: bigint): Uint8Array {
+  const abs = v < 0n ? -v : v;
+  const bitLength = abs === 0n ? 0 : abs.toString(2).length;
+  const n = Math.floor((bitLength + 8) / 8);
+  let t = v < 0n ? v + (1n << BigInt(8 * n)) : v;
+  const out = new Uint8Array(n);
+  for (let i = n - 1; i >= 0; i--) {
+    out[i] = Number(t & 0xffn);
+    t >>= 8n;
   }
-  const out = new Uint8Array(1 + mag.length);
-  out[0] = (1 << 1) | (neg ? 1 : 0);
-  out.set(mag, 1);
-  return out;
+  // A negative number may carry one sign-extension byte too many.
+  let start = 0;
+  while (start < n - 1 && out[start] === 0xff && ((out[start + 1] as number) & 0x80) !== 0) start++;
+  return start === 0 ? out : out.slice(start);
 }
 
-export function bigIntGobDecode(data: Uint8Array): bigint {
-  if (data.length === 0) throw new SyntaxError("vrpc: empty bigint payload");
-  const first = data[0] as number;
-  if (first >> 1 !== 1) throw new SyntaxError(`vrpc: unsupported bigint gob version ${first >> 1}`);
-  const neg = (first & 1) === 1;
+/** Decodes a two's-complement big-endian integer of any length of at least one byte. */
+export function twosComplementDecode(data: Uint8Array): bigint {
+  if (data.length === 0) throw new SyntaxError("vrpc: empty big integer payload");
   let v = 0n;
-  for (let i = 1; i < data.length; i++) v = (v << 8n) | BigInt(data[i] as number);
-  return neg ? -v : v;
+  for (const b of data) v = (v << 8n) | BigInt(b);
+  if (((data[0] as number) & 0x80) !== 0) v -= 1n << BigInt(8 * data.length);
+  return v;
 }
 
 function packBigInt(w: Writer, v: bigint): void {
-  packExt(w, BIGINT_EXT_TAG, bigIntGobEncode(v));
+  packExt(w, BIGINT_EXT_TAG, twosComplementEncode(v));
 }
 
 function packDecimal(w: Writer, v: VrpcDecimal): void {
-  const coef = bigIntGobEncode(v.coefficient);
-  const payload = new Uint8Array(4 + coef.length);
-  const dv = new DataView(payload.buffer);
-  dv.setInt32(0, v.exponent);
-  payload.set(coef, 4);
+  // The scale is the negated exponent; -2^31 is the one exponent whose
+  // negation is not an int32 and is written with the largest scale, as the
+  // Go side does (no such value decodes: the scale limit is far smaller).
+  const scale = Math.min(-v.exponent, 2147483647);
+  const unscaled = twosComplementEncode(v.coefficient);
+  const payload = new Uint8Array(4 + unscaled.length);
+  new DataView(payload.buffer).setInt32(0, scale);
+  payload.set(unscaled, 4);
   packExt(w, DECIMAL_EXT_TAG, payload);
+}
+
+const SECONDS_34 = 1n << 34n;
+const MAX_SECONDS_32 = 0xffffffffn;
+
+/**
+ * The payload of a MessagePack timestamp in its smallest form: 32-bit when the
+ * seconds fit an unsigned 32-bit integer and there are no nanoseconds, 64-bit
+ * (30 bits of nanoseconds above 34 bits of seconds) up to 2^34 seconds, 96-bit
+ * (32-bit nanoseconds then 64-bit signed seconds) otherwise.
+ */
+export function timestampPayload(seconds: bigint, nanos: number): Uint8Array {
+  if (nanos === 0 && seconds >= 0n && seconds <= MAX_SECONDS_32) {
+    const out = new Uint8Array(4);
+    new DataView(out.buffer).setUint32(0, Number(seconds));
+    return out;
+  }
+  if (seconds >= 0n && seconds < SECONDS_34) {
+    const out = new Uint8Array(8);
+    new DataView(out.buffer).setBigUint64(0, (BigInt(nanos) << 34n) | seconds);
+    return out;
+  }
+  const out = new Uint8Array(12);
+  const dv = new DataView(out.buffer);
+  dv.setUint32(0, nanos);
+  dv.setBigInt64(4, seconds);
+  return out;
+}
+
+function packTimestamp(w: Writer, t: VrpcTimestamp): void {
+  packExt(w, TIMESTAMP_EXT_TAG, timestampPayload(t.seconds, t.nanos));
 }
 
 function packValue(w: Writer, v: Value | undefined): void {
@@ -281,8 +329,14 @@ function packValue(w: Writer, v: Value | undefined): void {
     packBin(w, v);
   } else if (v instanceof VrpcDouble) {
     packDouble(w, v.value);
+  } else if (v instanceof VrpcBigInt) {
+    packBigInt(w, v.value);
   } else if (v instanceof VrpcDecimal) {
     packDecimal(w, v);
+  } else if (v instanceof Date) {
+    packTimestamp(w, VrpcTimestamp.fromDate(v));
+  } else if (v instanceof VrpcTimestamp) {
+    packTimestamp(w, v);
   } else if (v instanceof VrpcExt) {
     packExt(w, v.tag, v.data);
   } else if (Array.isArray(v)) {
@@ -403,15 +457,45 @@ function normalizeInt(v: bigint): number | bigint {
   return v >= -9007199254740991n && v <= 9007199254740991n ? Number(v) : v;
 }
 
-function decodeExt(tag: number, data: Uint8Array): Value {
-  if (tag === BIGINT_EXT_TAG) return bigIntGobDecode(data);
+function decodeExt(tag: number, data: Uint8Array, limits: DecodeLimits): Value {
+  if (tag === BIGINT_EXT_TAG) return twosComplementDecode(data);
   if (tag === DECIMAL_EXT_TAG) {
     if (data.length < 5) throw new SyntaxError("vrpc: truncated decimal payload");
-    const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
-    const exponent = dv.getInt32(0);
-    return new VrpcDecimal(bigIntGobDecode(data.subarray(4)), exponent);
+    const scale = new DataView(data.buffer, data.byteOffset, data.byteLength).getInt32(0);
+    const limit = limits.maxDecimalExponent ?? 0;
+    if (limit > 0 && Math.abs(scale) > limit) {
+      throw new RangeError(`vrpc: decimal scale ${scale} exceeds limit ${limit}`);
+    }
+    return new VrpcDecimal(twosComplementDecode(data.subarray(4)), 0 - scale);
   }
+  if (tag === TIMESTAMP_EXT_TAG) return decodeTimestamp(data);
   return new VrpcExt(tag, data);
+}
+
+function decodeTimestamp(data: Uint8Array): VrpcTimestamp {
+  const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  let seconds: bigint;
+  let nanos: number;
+  switch (data.length) {
+    case 4:
+      seconds = BigInt(dv.getUint32(0));
+      nanos = 0;
+      break;
+    case 8: {
+      const v = dv.getBigUint64(0);
+      nanos = Number(v >> 34n);
+      seconds = v & (SECONDS_34 - 1n);
+      break;
+    }
+    case 12:
+      nanos = dv.getUint32(0);
+      seconds = dv.getBigInt64(4);
+      break;
+    default:
+      throw new SyntaxError(`vrpc: timestamp payload of ${data.length} bytes, want 4, 8 or 12`);
+  }
+  if (nanos >= 1_000_000_000) throw new SyntaxError(`vrpc: timestamp nanoseconds ${nanos} out of range`);
+  return new VrpcTimestamp(seconds, nanos);
 }
 
 function readValue(r: Reader, depth: number): Value {
@@ -439,15 +523,15 @@ function readValue(r: Reader, depth: number): Value {
       return r.take(r.u32());
     case 0xc7: {
       const n = r.u8();
-      return decodeExt(r.byte(), r.take(n));
+      return decodeExt(r.byte(), r.take(n), r.limits);
     }
     case 0xc8: {
       const n = r.u16();
-      return decodeExt(r.byte(), r.take(n));
+      return decodeExt(r.byte(), r.take(n), r.limits);
     }
     case 0xc9: {
       const n = r.u32();
-      return decodeExt(r.byte(), r.take(n));
+      return decodeExt(r.byte(), r.take(n), r.limits);
     }
     case 0xca:
       return r.f32();
@@ -470,15 +554,15 @@ function readValue(r: Reader, depth: number): Value {
     case 0xd3:
       return normalizeInt(r.i64());
     case 0xd4:
-      return decodeExt(r.byte(), r.take(1));
+      return decodeExt(r.byte(), r.take(1), r.limits);
     case 0xd5:
-      return decodeExt(r.byte(), r.take(2));
+      return decodeExt(r.byte(), r.take(2), r.limits);
     case 0xd6:
-      return decodeExt(r.byte(), r.take(4));
+      return decodeExt(r.byte(), r.take(4), r.limits);
     case 0xd7:
-      return decodeExt(r.byte(), r.take(8));
+      return decodeExt(r.byte(), r.take(8), r.limits);
     case 0xd8:
-      return decodeExt(r.byte(), r.take(16));
+      return decodeExt(r.byte(), r.take(16), r.limits);
     case 0xd9:
       return utf8Decode(r.take(r.u8()));
     case 0xda:

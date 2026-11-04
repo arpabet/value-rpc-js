@@ -50,14 +50,22 @@ with `valuerpc.CodeOf`.
 
 ## Value model
 
-`null | boolean | number | bigint | string | Uint8Array | Value[] | {…} |
-VrpcDouble | VrpcDecimal | VrpcExt`
+`null | boolean | number | bigint | string | Uint8Array | Date | Value[] | {…} |
+VrpcDouble | VrpcBigInt | VrpcDecimal | VrpcTimestamp | VrpcExt`
 
 - Integer `number`s encode as value LONG; beyond ±2^53 pass a `bigint`
-  (exact int64 over msgpack). `double(x)` forces a DOUBLE encoding.
+  (exact int64 over msgpack, BigInt beyond that). `double(x)` forces a DOUBLE
+  encoding and `bigInt(x)` a BIGINT one.
 - `Uint8Array` is value RAW bytes.
 - Maps are plain objects; keys encode sorted (canonical frames).
 - `VrpcDecimal` (`decimal("1.045")`) and `VrpcExt` round-trip over msgpack.
+- A `Date` encodes as value's TIMESTAMP (msgpack's timestamp extension, the
+  instant a Go `time.Time` field holds). Timestamps decode to `VrpcTimestamp`
+  (`timestamp(seconds, nanos)`), which keeps nanoseconds; `toDate()` converts
+  when milliseconds are enough.
+
+The msgpack bytes are value's canonical form: the conformance vectors of
+`go.arpabet.com/value` (`test/canonical.json`) run against this codec.
 
 ## Streams & flow control
 

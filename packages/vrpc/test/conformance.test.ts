@@ -15,7 +15,7 @@ import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createClient, type CodecName, type VrpcClient } from "../src/index.js";
+import { VrpcTimestamp, createClient, timestamp, type CodecName, type VrpcClient } from "../src/index.js";
 import { Code, VrpcError } from "../src/errors.js";
 import type { Value } from "../src/value.js";
 
@@ -106,6 +106,20 @@ describe.skipIf(!hasGo).each(CODECS)("conformance against the Go server (%s)", (
     if (codec === "msgpack") (payload as Record<string, Value>).big = 2n ** 60n;
     const echoed = await client.call("echo", payload);
     expect(echoed).toEqual(payload);
+  });
+
+  it("unary: echo round-trips a timestamp over msgpack", async () => {
+    // A value >= 1.5.0 server decodes the timestamp and re-encodes it
+    // canonically; an older one passes the extension through unchanged. The
+    // bytes are the same either way, and they decode to the same instant.
+    if (codec !== "msgpack") return;
+    const when = new Date("2026-10-30T07:28:39.075Z");
+    const echoed = (await client.call("echo", { when })) as { when: VrpcTimestamp };
+    expect(echoed.when).toBeInstanceOf(VrpcTimestamp);
+    expect(echoed.when.toDate().getTime()).toBe(when.getTime());
+    const nanos = timestamp(1793345319n, 123_456_789);
+    const back = (await client.call("echo", [nanos])) as VrpcTimestamp[];
+    expect(back[0]?.equals(nanos)).toBe(true);
   });
 
   it("unary: coded errors arrive with their code", async () => {

@@ -8,7 +8,7 @@ Design background: the Go repo's `WEB.md`.
 
 | Package | What it is |
 |---|---|
-| [`@arpabet/vrpc`](packages/vrpc) | Protocol core: msgpack + JSON codecs, all four RPC patterns, credit-based flow control on async iterators, reconnect with hash-chain session resumption, reverse (server→browser) calls, typed no-codegen API surface. **Zero runtime dependencies.** |
+| [`@arpabet/vrpc`](packages/vrpc) | Protocol core: canonical msgpack + JSON codecs (decimals, big integers, timestamps), all four RPC patterns, credit-based flow control on async iterators, reconnect with hash-chain session resumption, reverse (server→browser) calls, typed no-codegen API surface. **Zero runtime dependencies.** |
 | [`@arpabet/vrpc-vue`](packages/vrpc-vue) | Vue 3 plugin + composables: `useVrpcCall`, `useVrpcStream`, `useVrpcConnection`. |
 | [`@arpabet/vrpc-nuxt`](packages/vrpc-nuxt) | Nuxt 3/4 module: client-only plugin, auto-imported composables, runtime config, dev proxy. |
 
