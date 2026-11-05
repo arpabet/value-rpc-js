@@ -79,6 +79,8 @@ jobs:
               echo "SKIP     $name@$version — already on the registry"
             else
               echo "PUBLISH  $name@$version"
-              npm publish --workspace "$pkg"
+              # verbose: npm reports the trusted-publisher (OIDC) exchange only at
+              # this level, so a fallback to NPM_TOKEN shows its reason in the log.
+              npm publish --workspace "$pkg" --loglevel verbose
             fi
           done
