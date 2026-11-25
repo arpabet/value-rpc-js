@@ -21,7 +21,7 @@ client.addFunction("notify", (args) => null);             // server calls YOU
 | Option | Default | Meaning |
 |---|---|---|
 | `url` | — | `ws://` / `wss://` endpoint |
-| `codec` | `"msgpack"` | `"msgpack"` works with every server; `"json"` needs a JSON-codec server (negotiated via the `vrpc.json` subprotocol) |
+| `codec` | `"msgpack"` | `"msgpack"` or `"json"`. The client offers the codec's WebSocket subprotocol (`vrpc.msgpack`, `vrpc.json`), as the Go client does, and the server must echo it: any value-rpc server from v1.5.3 on. A codec object with empty `subprotocols` offers nothing |
 | `auth` | — | credential (or async factory) for the handshake `auth` field |
 | `timeoutMs` | `5000` | default unary timeout, sent as the request SLA |
 | `connectTimeoutMs` | `10000` | dial + handshake bound |

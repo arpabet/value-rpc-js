@@ -5,6 +5,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and
 the packages follow [Semantic Versioning](https://semver.org/). All three
 packages share one version.
 
+## 0.4.0 — 2026-11-24
+
+The client negotiates its codec as the Go client does. **A 0.4.0 client needs
+a value-rpc server of v1.5.3 or later**, the first that negotiates.
+
+### Changed
+
+- **The msgpack codec offers the `vrpc.msgpack` WebSocket subprotocol** and
+  requires the server to echo it. It offered nothing, on the reading that no
+  subprotocol is the msgpack negotiation; but value-rpc's own client has
+  offered `vrpc.msgpack` since the negotiation was added (v1.5.3), and the Go
+  implementation is the reference. The JSON codec is unchanged (`vrpc.json`).
+  Against a server that echoes nothing the connect fails with
+  `Code.Unavailable` and an error that says why. To reach such a server pass a
+  codec that offers nothing: `codec: { ...msgpackCodec(), subprotocols: [] }`.
+
+### Added
+
+- `SUBPROTOCOL_MSGPACK` and `SUBPROTOCOL_JSON`, the tokens of the two codecs.
+- The conformance suite echoes text with control characters, quotes and
+  backslashes, as a value and as a map key, in both codecs. Over JSON this
+  needs a server built with value v1.6.2 (value-rpc v1.6.5), which the
+  conformance server now is: before, such an answer was not JSON, and the
+  client could not read it.
+
 ## 0.3.0 — 2026-11-03
 
 Wire alignment with `go.arpabet.com/value` v1.5.0. **The msgpack bytes of

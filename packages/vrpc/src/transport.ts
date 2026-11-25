@@ -68,7 +68,7 @@ export const webSocketDialer: Dialer = (opts) => {
             Code.Unavailable,
             `server did not accept subprotocol ${opts.subprotocols.join("/")} (got ${JSON.stringify(
               ws.protocol,
-            )}); it likely predates JSON codec support — use codec: "msgpack"`,
+            )}); it predates codec negotiation (value-rpc before v1.5.3) or does not enable this codec`,
           ),
         );
         return;

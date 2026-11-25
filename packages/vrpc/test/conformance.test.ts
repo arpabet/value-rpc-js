@@ -122,6 +122,21 @@ describe.skipIf(!hasGo).each(CODECS)("conformance against the Go server (%s)", (
     expect(back[0]?.equals(nanos)).toBe(true);
   });
 
+  it("unary: echo round-trips text that JSON has to escape", async () => {
+    // Control characters, quotes and backslashes, as a value and as a map
+    // key. msgpack carries any text; over JSON the server's answer was not
+    // JSON before value v1.6.2 (value-rpc v1.6.5), and the client could not
+    // read it.
+    const ch = (code: number): string => String.fromCharCode(code);
+    const text = `bell ${ch(7)}, escape ${ch(27)}[0m, vertical tab ${ch(11)}, delete ${ch(127)}, quote " and backslash \\`;
+    const payload: Value = {
+      [text]: text,
+      list: [text, "line\nbreak\ttab", `nul ${ch(0)} inside`],
+      nested: { 'key "quoted"': 1 },
+    };
+    expect(await client.call("echo", payload)).toEqual(payload);
+  });
+
   it("unary: coded errors arrive with their code", async () => {
     const err = (await client.call("fail").catch((e) => e)) as VrpcError;
     expect(err).toBeInstanceOf(VrpcError);

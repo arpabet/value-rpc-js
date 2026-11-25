@@ -38,9 +38,12 @@ export interface ClientOptions {
   /** WebSocket endpoint, e.g. "wss://example.com/rpc". */
   url: string;
   /**
-   * Wire codec. "msgpack" (default) speaks to every value-rpc server —
-   * binary frames, no subprotocol. "json" offers the "vrpc.json" subprotocol
-   * and requires a server with JSON codec support (WEB.md phase 1).
+   * Wire codec. "msgpack" (default) is binary frames, "json" text frames. The
+   * client offers the codec's WebSocket subprotocol, "vrpc.msgpack" or
+   * "vrpc.json", as the Go client does, and requires the server to echo it:
+   * any value-rpc server from v1.5.3 on does for msgpack, and for JSON unless
+   * it was restricted to msgpack. Pass a codec object whose `subprotocols` is
+   * empty to offer nothing, which an older server needs.
    */
   codec?: CodecName | WireCodec;
   /**

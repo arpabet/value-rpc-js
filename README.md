@@ -96,16 +96,24 @@ Composables are auto-imported. The plugin is **client-only**: SSR renders the
 pending state and the browser fills after hydration (no WebSocket per SSR
 render). Override per deployment with `NUXT_PUBLIC_VRPC_URL`.
 
-## Codecs: msgpack now, JSON when the server speaks it
+## Codecs: msgpack by default, JSON on request
+
+The client offers the WebSocket subprotocol of its codec and requires the
+server to echo it, as the Go client (`valuerpc`'s WebSocket dialer) does.
+Every value-rpc server from v1.5.3 on negotiates.
 
 - **`codec: "msgpack"` (default)** — one MessagePack envelope per binary
-  WebSocket frame. Compatible with **every existing value-rpc server**. The
-  codec is implemented in-package (canonical `value` encoding), so the core
-  stays dependency-free.
-- **`codec: "json"`** — one JSON envelope per text frame, negotiated with the
-  `vrpc.json` WebSocket subprotocol per WEB.md §3.4. Requires a server with
-  the JSON wire codec (WEB.md phase 1); against an older server the client
-  fails fast with a clear error instead of sending frames it would choke on.
+  WebSocket frame, offered as `vrpc.msgpack`. The codec is implemented
+  in-package (canonical `value` encoding), so the core stays dependency-free.
+- **`codec: "json"`** — one JSON envelope per text frame, offered as
+  `vrpc.json` (WEB.md §3.4). Text with control characters, and a quote in a
+  map key, need a server built with value v1.6.2 or later (value-rpc v1.6.5):
+  an older one answers them with a frame that is not JSON.
+
+Against a server that does not echo the subprotocol the connect fails fast
+with a clear error. To reach a server older than v1.5.3, which serves msgpack
+and negotiates nothing, pass a codec that offers nothing:
+`codec: { ...msgpackCodec(), subprotocols: [] }`.
 
 Value model notes (both codecs):
 

@@ -45,6 +45,8 @@ export {
 } from "./protocol.js";
 
 export {
+  SUBPROTOCOL_JSON,
+  SUBPROTOCOL_MSGPACK,
   codecByName,
   jsonCodec,
   msgpackCodec,

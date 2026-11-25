@@ -10,17 +10,26 @@ import type { ValueMap } from "./value.js";
 export type CodecName = "msgpack" | "json";
 
 /**
+ * The WebSocket subprotocol tokens of the wire codecs, valuerpc's
+ * SubprotocolMsgpack and SubprotocolJson.
+ */
+export const SUBPROTOCOL_MSGPACK = "vrpc.msgpack";
+export const SUBPROTOCOL_JSON = "vrpc.json";
+
+/**
  * The wire codec seam (WEB.md §3.3): one envelope per WebSocket frame,
  * msgpack in binary frames, JSON in text frames.
  */
 export interface WireCodec {
   readonly name: CodecName;
   /**
-   * Subprotocol offered on dial. msgpack offers none: "no subprotocol" IS the
-   * msgpack negotiation, and it keeps compatibility with servers that predate
-   * codec negotiation. JSON offers "vrpc.json" and requires the server to echo
-   * it (a server that does not support JSON fails the connect with a clear
-   * error instead of choking on text frames).
+   * Subprotocols offered on dial, of which the server must echo one: the
+   * token of the codec, "vrpc.msgpack" or "vrpc.json", as the Go client
+   * offers the token of its codec. A server that predates codec negotiation
+   * (value-rpc before v1.5.3) echoes none, and the connect fails with a clear
+   * error instead of exchanging frames in a codec the two sides did not agree
+   * on. A codec with an empty list offers nothing and takes what the server
+   * serves a client that offers nothing, which is msgpack.
    */
   readonly subprotocols: string[];
   readonly textFrames: boolean;
@@ -38,7 +47,7 @@ function assertMap(v: unknown, codec: string): ValueMap {
 export function msgpackCodec(limits: DecodeLimits = DEFAULT_LIMITS): WireCodec {
   return {
     name: "msgpack",
-    subprotocols: [],
+    subprotocols: [SUBPROTOCOL_MSGPACK],
     textFrames: false,
     encode: (msg) => msgpackEncode(msg),
     decode: (data) => {
@@ -55,7 +64,7 @@ export function msgpackCodec(limits: DecodeLimits = DEFAULT_LIMITS): WireCodec {
 export function jsonCodec(limits: DecodeLimits = DEFAULT_LIMITS): WireCodec {
   return {
     name: "json",
-    subprotocols: ["vrpc.json"],
+    subprotocols: [SUBPROTOCOL_JSON],
     textFrames: true,
     encode: (msg) => jsonEncode(msg),
     decode: (data) => {
