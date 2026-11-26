@@ -4,11 +4,21 @@
  */
 
 /**
- * Conformance suite: runs the TS client against the real Go value-rpc server
- * (conformance/server) over WebSocket, once for EACH wire codec — msgpack
- * (binary frames) and JSON (text frames, negotiated by the vrpc.json
- * subprotocol). Every pattern, both call directions, auth, cancellation, and
- * reconnect-with-resumption. Skipped when the Go toolchain is unavailable.
+ * Conformance suite: runs the TS client against a real value-rpc server over
+ * WebSocket, once for EACH wire codec — msgpack (binary frames) and JSON
+ * (text frames, negotiated by the vrpc.json subprotocol). Every pattern, both
+ * call directions, auth, cancellation, and reconnect-with-resumption.
+ *
+ * The server is the Go one of this repository (conformance/server), and the
+ * suite is skipped when the Go toolchain is unavailable. With
+ * VRPC_CONFORMANCE_SERVER set, it is another implementation's instead: the
+ * variable is the command that starts it (run by the shell), and the server
+ * must serve the same functions and say where it listens as the Go one does
+ * (see startServer). The Java implementation, from a checkout beside this
+ * repository:
+ *
+ *   VRPC_CONFORMANCE_SERVER='cd ../../../value-rpc-java && ./gradlew -q :value-rpc:conformanceServer' \
+ *     npx vitest run test/conformance.test.ts
  */
 
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
@@ -37,17 +47,34 @@ interface Server {
   url: string;
 }
 
+/** The command that starts another implementation's conformance server, in place of the Go one. */
+const serverCommand = process.env.VRPC_CONFORMANCE_SERVER;
+
+/**
+ * Starts a server of its own for the caller, and gives its WebSocket URL once
+ * the server has said where it listens, on a line of its standard output:
+ *
+ *   LISTENING <host:port>            WebSocket under /rpc (the Go server here)
+ *   LISTENING ws <host:port/path>    WebSocket at that address (the Java one,
+ *                                    which says `LISTENING tcp ...` as well)
+ *
+ * The server exits when its standard input ends.
+ */
 async function startServer(): Promise<Server> {
-  const proc = spawn("go", ["run", "."], { cwd: serverDir, stdio: ["pipe", "pipe", "inherit"] });
+  const proc = serverCommand
+    ? // Its own process group: the command may start the server through a build tool, and all of it has to go.
+      spawn(serverCommand, { shell: true, detached: true, stdio: ["pipe", "pipe", "inherit"] })
+    : spawn("go", ["run", "."], { cwd: serverDir, stdio: ["pipe", "pipe", "inherit"] });
   const url = await new Promise<string>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("conformance server did not start in time")), 60_000);
+    const timer = setTimeout(() => reject(new Error("conformance server did not start in time")), 120_000);
     let buffer = "";
     proc.stdout?.on("data", (chunk: Buffer) => {
       buffer += chunk.toString();
-      const m = /LISTENING (\S+)/.exec(buffer);
-      if (m) {
+      const ws = /^LISTENING ws (\S+)\r?\n/m.exec(buffer);
+      const plain = /^LISTENING (\S+)\r?\n/m.exec(buffer);
+      if (ws || plain) {
         clearTimeout(timer);
-        resolve(`ws://${m[1]}/rpc`);
+        resolve(ws ? `ws://${ws[1]}` : `ws://${plain![1]}/rpc`);
       }
     });
     proc.on("exit", (code) => {
@@ -59,13 +86,23 @@ async function startServer(): Promise<Server> {
 }
 
 function stopServer(server: Server | undefined): void {
-  server?.proc.stdin?.end();
-  setTimeout(() => server?.proc.kill("SIGKILL"), 1000).unref?.();
+  if (!server) return;
+  server.proc.stdin?.end();
+  setTimeout(() => {
+    try {
+      if (serverCommand && server.proc.pid !== undefined) process.kill(-server.proc.pid, "SIGKILL");
+      else server.proc.kill("SIGKILL");
+    } catch {
+      // gone already
+    }
+  }, 1000).unref?.();
 }
 
 const CODECS: CodecName[] = ["msgpack", "json"];
 
-describe.skipIf(!hasGo).each(CODECS)("conformance against the Go server (%s)", (codec) => {
+const SERVER_NAME = serverCommand ? "the server of VRPC_CONFORMANCE_SERVER" : "the Go server";
+
+describe.skipIf(!hasGo && !serverCommand).each(CODECS)(`conformance against ${SERVER_NAME} (%s)`, (codec) => {
   let server: Server;
   let client: VrpcClient;
 

@@ -363,17 +363,45 @@ export class VrpcClient {
 
   // -------------------------------------------------------------- connection
 
-  /** Connects (idempotent). Calls also auto-connect on first use. */
+  /**
+   * Connects (idempotent). Calls also auto-connect on first use.
+   *
+   * Rejects with why the connection could not be made: `Code.Unavailable`
+   * when the server cannot be reached, and the server's own code and reason
+   * when it refuses the handshake (`Code.Unauthenticated` for a credential
+   * it does not take). A client that has never been connected is `idle`
+   * again after a failed attempt, so the next `connect()` or call dials
+   * again; one that lost its connection keeps `resuming` by itself.
+   */
   async connect(): Promise<void> {
     if (this._status === "open") return;
     if (this._status === "closed") throw errClientClosed();
     if (!this.connectPromise) {
-      this.setStatus(this._status === "resuming" ? "resuming" : "connecting");
-      this.connectPromise = this.doConnect().finally(() => {
-        this.connectPromise = null;
-      });
+      const first = this._status !== "resuming";
+      if (first) this.setStatus("connecting");
+      this.connectPromise = this.doConnect()
+        .catch((err: unknown) => {
+          // A first connect that failed left the client "connecting" for
+          // good, with nothing dialing: every later call waited out its
+          // timeout for a connection nobody was making. Back to idle, and
+          // whoever waited on this attempt is told why it failed.
+          if (first && this._status === "connecting") this.failConnecting(err);
+          throw err;
+        })
+        .finally(() => {
+          this.connectPromise = null;
+        });
     }
     return this.connectPromise;
+  }
+
+  /** A first connect failed: the client is idle again, and what waited on the attempt fails with its error. */
+  private failConnecting(err: unknown): void {
+    const waiters = this.openWaiters;
+    this.openWaiters = [];
+    this.setStatus("idle");
+    const why = err instanceof VrpcError ? err : new VrpcError(Code.Unavailable, `connect failed: ${String(err)}`, { cause: err });
+    for (const w of waiters) w.reject(why);
   }
 
   private async handshakeToken(): Promise<string> {
@@ -960,6 +988,22 @@ export class VrpcClient {
     const rid = this.protocol.requestId(msg);
     if (rid === undefined) {
       this.emit("error", new VrpcError(Code.Internal, "request id not found"));
+      return;
+    }
+
+    // A server that refuses the handshake says why, in an ErrorResponse on
+    // the handshake's request id, and then closes. It surfaces from connect()
+    // with the server's code, as in the Go and Java clients; before, it was
+    // dropped, and connect() failed with the close that follows: a lost
+    // connection, with no way to tell a wrong credential from a dead server.
+    if (
+      mt === MessageType.ErrorResponse &&
+      rid === this.protocol.d.handshakeRequestId &&
+      this.handshakeWaiter &&
+      transport === this.handshakeTransport
+    ) {
+      const { code, message } = this.protocol.errorOf(msg);
+      this.handshakeWaiter.reject(new VrpcError(code, `handshake: ${message || "refused"}`));
       return;
     }
 

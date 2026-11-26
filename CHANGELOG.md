@@ -5,6 +5,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and
 the packages follow [Semantic Versioning](https://semver.org/). All three
 packages share one version.
 
+## Unreleased
+
+### Fixed
+
+- **A refused handshake says why.** A server that refuses a handshake answers
+  it with an `ErrorResponse` and then closes. The client dropped that answer
+  as a frame for no request, so `connect()` failed with the close that
+  followed: `Code.Unavailable`, "connection lost", whatever the reason. It
+  now rejects with the server's own code and words, as the Go and Java clients
+  do: `Code.Unauthenticated` and `handshake: authentication failed` for a
+  credential the server does not take, so a wrong credential can be told from
+  a server that is down.
+- **A first connect that failed left the client `connecting` for good.**
+  Nothing dialed again, and every later call waited out its timeout for a
+  connection nobody was making. The client is now `idle` again after a failed
+  first attempt (a `status` event says so), and the next `connect()` or call
+  dials again; a call that was waiting on the failed attempt rejects with its
+  error at once. A client that lost a connection it had is unchanged: it keeps
+  `resuming` by itself.
+
+### Added
+
+- The conformance suite runs against another implementation's server when
+  `VRPC_CONFORMANCE_SERVER` holds the command that starts it. Against the
+  server of value-rpc-java all 19 scenarios pass in both codecs, the four
+  reverse ones among them.
+
 ## 0.4.0 — 2026-11-24
 
 The client negotiates its codec as the Go client does. **A 0.4.0 client needs

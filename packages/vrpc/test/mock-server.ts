@@ -12,6 +12,7 @@
  */
 
 import { msgpackCodec, type WireCodec } from "../src/codec.js";
+import { Code, VrpcError } from "../src/errors.js";
 import { MessageType, Protocol, newDialect } from "../src/protocol.js";
 import type { Dialer, Transport } from "../src/transport.js";
 import type { Value, ValueMap } from "../src/value.js";
@@ -46,6 +47,14 @@ export class MockServer {
   readonly handshakes: ValueMap[] = [];
   putReceived: Value[] = [];
   authRejects = false;
+  /**
+   * When set, a handshake is refused as the Go and Java servers refuse one
+   * they have looked at: an ErrorResponse on the handshake's request id that
+   * says why, and then the close.
+   */
+  refuseWith: { code: number; message: string } | null = null;
+  /** When set, the next dials fail: the server cannot be reached. */
+  unreachable = 0;
   /** When set, get-stream requests flood N values ignoring credit. */
   floodOnGet: number | null = null;
   private nextServerRid = 0;
@@ -60,6 +69,10 @@ export class MockServer {
 
   dialer(): Dialer {
     return async () => {
+      if (this.unreachable > 0) {
+        this.unreachable--;
+        throw new VrpcError(Code.Unavailable, "websocket dial failed: ws://mock/rpc");
+      }
       const conn = new MockConnImpl(this);
       this.conns.push(conn);
       return conn.clientTransport;
@@ -185,8 +198,13 @@ export class MockConnImpl implements MockConn {
     if (mt === MessageType.HandshakeRequest) {
       this.handshake = msg;
       this.server.handshakes.push(msg);
+      if (this.server.refuseWith) {
+        this.push(proto.errorResponse(0, this.server.refuseWith.code, this.server.refuseWith.message));
+        this.drop();
+        return;
+      }
       if (this.server.authRejects) {
-        this.drop(); // Go servers reject by closing the connection
+        this.drop(); // what is not a handshake at all is closed without a word
         return;
       }
       this.push({ m: "vRPC", v: 1, t: MessageType.HandshakeResponse, rid: 0 });

@@ -42,7 +42,7 @@ for await (const msg of chat) { /* … */ }
 // peer symmetry: the SERVER can call the BROWSER
 client.addFunction("notify", (args) => { toast(String(args)); return null; });
 
-client.on("status", (s) => badge.textContent = s); // connecting|open|resuming|closed
+client.on("status", (s) => badge.textContent = s); // connecting|open|resuming|closed, idle after a first connect that failed
 ```
 
 Typed calls without codegen:

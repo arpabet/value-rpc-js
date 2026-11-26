@@ -57,6 +57,66 @@ describe("handshake", () => {
     await expect(client.connect()).rejects.toThrow();
     client.close();
   });
+
+  it("surfaces the server's code and reason when it refuses the handshake", async () => {
+    const { server, client } = newPair();
+    const statuses: string[] = [];
+    client.on("status", (s) => statuses.push(s));
+    const anomalies: Error[] = [];
+    client.on("error", (e) => anomalies.push(e));
+    server.refuseWith = { code: Code.Unauthenticated, message: "authentication failed" };
+    const err = await client.connect().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(VrpcError);
+    expect((err as VrpcError).code).toBe(Code.Unauthenticated);
+    expect((err as VrpcError).detail).toBe("handshake: authentication failed");
+    // The refusal is the answer to the handshake, not a frame that fits nothing.
+    expect(anomalies).toEqual([]);
+    // Never connected: idle again, not left "connecting" with nobody dialing.
+    expect(statuses).toEqual(["connecting", "idle"]);
+    expect(client.status).toBe("idle");
+    // Whatever the server refuses with is what the caller sees.
+    server.refuseWith = { code: Code.InvalidArgument, message: "malformed handshake" };
+    const again = await client.connect().catch((e: unknown) => e);
+    expect((again as VrpcError).code).toBe(Code.InvalidArgument);
+    client.close();
+  });
+
+  it("dials again on the next use after a first connect that failed", async () => {
+    const { server, client } = newPair();
+    server.addFunction("greet", () => "hello");
+    server.unreachable = 1;
+    // A call made while the first attempt is under way waits on that attempt, and fails with it.
+    const first = client.connect().catch((e: unknown) => e);
+    const waiting = client.call("greet").catch((e: unknown) => e);
+    expect((await first as VrpcError).code).toBe(Code.Unavailable);
+    expect((await waiting as VrpcError).code).toBe(Code.Unavailable);
+    expect(client.status).toBe("idle");
+    // The server is there now: the next call connects by itself.
+    expect(await client.call("greet")).toBe("hello");
+    expect(client.status).toBe("open");
+    expect(server.conns.length).toBe(1);
+    client.close();
+  });
+
+  it("keeps resuming, not idle, when a reconnect attempt fails", async () => {
+    const { server, client } = newPair();
+    await client.connect();
+    const statuses: string[] = [];
+    client.on("status", (s) => statuses.push(s));
+    server.unreachable = 2;
+    server.conn.drop();
+    await new Promise<void>((resolve) => {
+      const off = client.on("status", (s) => {
+        if (s === "open") {
+          off();
+          resolve();
+        }
+      });
+    });
+    // Two dials failed on the way: the client stayed "resuming" throughout.
+    expect(statuses).toEqual(["resuming", "open"]);
+    client.close();
+  });
 });
 
 describe("unary calls", () => {
